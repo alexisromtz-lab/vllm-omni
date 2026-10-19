@@ -63,7 +63,10 @@ class InlineDuplexClient(DuplexClientBase):
     async def _open(self) -> None:
         # The handle's first event is ``session.created``; the pump delivers
         # it through ``_dispatch`` where the base handshake is waiting.
-        self._handle = await self.omni.open_session(self.config.to_session_payload(model=self.model))
+        self._handle = await self.omni.open_session(
+            self.config.to_session_payload(model=self.model),
+            timeout=self._handshake_timeout_s,
+        )
         # The base class follows up with the ``session.update`` handshake; the
         # open above already carried that session object, so it is not resent.
         self._handshake_pending = True

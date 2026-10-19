@@ -172,9 +172,11 @@ class FakeInlineOmni:
     def __init__(self) -> None:
         self.opened: list[dict[str, object]] = []
         self.handles: list[FakeInlineHandle] = []
+        self.open_timeouts: list[float | None] = []
 
-    async def open_session(self, config: dict[str, object]) -> FakeInlineHandle:
+    async def open_session(self, config: dict[str, object], *, timeout: float | None = None) -> FakeInlineHandle:
         self.opened.append(dict(config))
+        self.open_timeouts.append(timeout)
         handle = FakeInlineHandle(SESSION_ID)
         self.handles.append(handle)
         handle.deliver(
@@ -214,8 +216,8 @@ def _inline_rig(*, handshake: dict[str, object] | None = SESSION_CREATED) -> Rig
     client, omni = make_inline_client()
     original_open = omni.open_session
 
-    async def open_session(config: dict[str, object]) -> FakeInlineHandle:
-        handle = await original_open(config)
+    async def open_session(config: dict[str, object], *, timeout: float | None = None) -> FakeInlineHandle:
+        handle = await original_open(config, timeout=timeout)
         if handshake is not SESSION_CREATED:
             # Replace the default session.created with the requested first event.
             handle._outbox = asyncio.Queue()
@@ -838,6 +840,16 @@ async def test_inline_handshake_opens_session_with_payload_and_adopts_id():
         await client.send({"type": "session.update", "session": {"instructions": "later"}})
         assert [type(command) for command in handle.commands] == [duplex_commands.UpdateSession]
         assert handle.commands[0].patch == {"instructions": "later"}
+
+
+@pytest.mark.asyncio
+async def test_inline_client_forwards_handshake_timeout_to_open_session():
+    client, omni = make_inline_client(handshake_timeout_s=7.5)
+    async with client:
+        assert client.session_id == SESSION_ID
+    # The client advertises a handshake budget; the session open must honour
+    # it instead of silently falling back to the engine default.
+    assert omni.open_timeouts == [7.5]
 
 
 @pytest.mark.asyncio
