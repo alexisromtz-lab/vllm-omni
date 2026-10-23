@@ -853,6 +853,17 @@ async def test_inline_client_forwards_handshake_timeout_to_open_session():
 
 
 @pytest.mark.asyncio
+async def test_inline_client_leaves_the_open_timeout_to_the_engine_by_default():
+    omni = FakeInlineOmni()
+    client = InlineDuplexClient(omni, model="test-model")
+    async with client:
+        assert client.session_id == SESSION_ID
+    # Without a caller-supplied budget the client must not forward one, so the
+    # engine's own open default (which a cold start relies on) stays in force.
+    assert omni.open_timeouts == [None]
+
+
+@pytest.mark.asyncio
 async def test_inline_client_submits_typed_commands_in_order():
     client, omni = make_inline_client()
     async with client:
