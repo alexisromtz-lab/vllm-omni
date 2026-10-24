@@ -56,7 +56,10 @@ from typing import Any
 import pytest
 import torch
 
-from tests.helpers.mark import hardware_marks
+try:  # a direct-path ``python <file>`` run has no package root on sys.path
+    from tests.helpers.mark import hardware_marks
+except ModuleNotFoundError:  # pragma: no cover - standalone instrument only
+    hardware_marks = None
 
 _MARKER = "HUELLA-INSTRUMENTO-STACK-A5-20261023"
 _CONTROL_ARM = "control_with_stack_false"
@@ -81,11 +84,14 @@ def _npu_available() -> bool:
         return False
 
 
+# One SKU per item, per repo convention. A3 is the Ascend SKU the CI pools are
+# built on -- most ``npu`` entries under ``tests/dfx/**`` declare A3 -- so the
+# probe is selected where it can actually run. The issue was reported on A5;
+# ad-hoc runs there do not need the mark (the standalone CLI is SKU-agnostic),
+# and the skip below still refuses to pretend on a host without the device.
 pytestmark = [
     pytest.mark.local_model,
-    # The issue is reported on A5; the marks only describe the rig this instrument
-    # needs, the skip below still guards at runtime.
-    *hardware_marks(res={"npu": "A5"}, num_cards=1),
+    *(hardware_marks(res={"npu": "A3"}, num_cards=1) if hardware_marks else []),
     pytest.mark.skipif(
         not _npu_available(),
         reason="requires an Ascend NPU device: this test measures the exported trace, not a mock",
